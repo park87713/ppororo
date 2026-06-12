@@ -243,7 +243,8 @@ export class Environment {
       case 'facade':
         return [
           { key: 'width', label: '파사드 폭 (m)', min: 6, max: 80, step: 1 },
-          { key: 'height', label: '파사드 높이 (m)', min: 4, max: 60, step: 1 }
+          { key: 'height', label: '파사드 높이 (m)', min: 4, max: 60, step: 1 },
+          { key: 'ground', label: '투사 가용 깊이 (m)', min: 20, max: 350, step: 10 }
         ];
       case 'curved':
         return [

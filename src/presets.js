@@ -32,6 +32,18 @@ export const PROJECTOR_SPECS = [
     tr: [1.5, 3.0], shiftV: 0.6, shiftH: 0.3
   },
   {
+    id: 'uhd20000lt',
+    name: '대형 4K 20,000lm + 장초점 렌즈 (7.4–14.6:1)',
+    resX: 3840, resY: 2160, lumens: 20000,
+    tr: [7.4, 14.6], shiftV: 0.6, shiftH: 0.3
+  },
+  {
+    id: 'wuxga30000lt',
+    name: '최대급 WUXGA 30,000lm + 장초점 렌즈',
+    resX: 1920, resY: 1200, lumens: 30000,
+    tr: [7.4, 14.6], shiftV: 0.5, shiftH: 0.25
+  },
+  {
     id: 'ust4500',
     name: '초단초점(UST) FHD 4,500lm',
     resX: 1920, resY: 1080, lumens: 4500,
@@ -41,7 +53,7 @@ export const PROJECTOR_SPECS = [
     id: 'custom',
     name: '커스텀 (직접 입력)',
     resX: 1920, resY: 1080, lumens: 5000,
-    tr: [0.3, 4.0], shiftV: 0.8, shiftH: 0.5
+    tr: [0.25, 15.0], shiftV: 0.8, shiftH: 0.5
   }
 ];
 
@@ -58,7 +70,7 @@ export const PROJECTOR_COLORS = [
 // 환경 프리셋 기본 파라미터 (단위: m)
 export const ENV_DEFAULTS = {
   room:   { width: 10, depth: 8, height: 3.2 },
-  facade: { width: 22, height: 14, ground: 40 },
+  facade: { width: 22, height: 14, ground: 60 },
   curved: { radius: 6, angleDeg: 120, height: 3.5, ground: 24 },
   stage:  { width: 14, depth: 10, height: 6 }
 };

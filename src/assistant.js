@@ -92,7 +92,7 @@ export function setupAssistant(app) {
       <div class="prop-row"><label>프로젝터 기종</label>
         <select id="as-spec">${PROJECTOR_SPECS.filter(s => s.id !== 'custom').map(s => `<option value="${s.id}">${s.name}</option>`).join('')}</select>
       </div>
-      <div class="prop-row"><label>스로우비</label><input type="number" id="as-tr" step="0.1" min="0.2" max="4"></div>
+      <div class="prop-row"><label>스로우비</label><input type="number" id="as-tr" step="0.1" min="0.2" max="15"></div>
       <div class="prop-row"><label>블렌딩 오버랩 (%)</label><input type="number" id="as-ov" value="15" step="5" min="0" max="40"></div>
       <hr class="sep">
       <div class="prop-row"><label>목표 픽셀 밀도</label><input type="number" id="as-pxm" value="40" step="5" min="5"> <span style="color:var(--text-dim)">px/m</span></div>

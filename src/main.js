@@ -53,7 +53,7 @@ class App {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0e1013);
 
-    this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 600);
+    this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 2000);
     this.camera.position.set(9, 6, 11);
     this.camera.layers.enable(1);
 

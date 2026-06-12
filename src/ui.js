@@ -341,7 +341,7 @@ export function setupUI(app) {
 
     // --- 렌즈 ---
     const g3 = group('렌즈');
-    const trRange = spec.id === 'custom' ? [0.3, 4.0] : spec.tr;
+    const trRange = spec.id === 'custom' ? [0.25, 15.0] : spec.tr;
     const fixedTr = Math.abs(trRange[0] - trRange[1]) < 1e-6;
     const trSlider = sliderRow(
       '스로우비', fixedTr ? trRange[0] * 0.99 : trRange[0], fixedTr ? trRange[0] * 1.01 : trRange[1], 0.01,

@@ -45,7 +45,8 @@ export class Projector {
     this.group = new THREE.Group();
     this.group.rotation.order = 'YXZ';
 
-    this.camera = new THREE.PerspectiveCamera(30, 16 / 10, 0.4, 100);
+    // far 400m: 장초점 렌즈(최대 14.6:1)로 300m급 원거리 투사까지 커버
+    this.camera = new THREE.PerspectiveCamera(30, 16 / 10, 0.4, 400);
     this.group.add(this.camera);
 
     this._buildBody();
@@ -223,7 +224,7 @@ export class Projector {
   computeMetrics(receiverMeshes) {
     const origin = this.worldPosition();
     const dir = this.worldForward();
-    const ray = new THREE.Raycaster(origin, dir, 0.05, 200);
+    const ray = new THREE.Raycaster(origin, dir, 0.05, 1000);
     ray.layers.set(0);
     const hits = ray.intersectObjects(receiverMeshes, false);
     if (!hits.length) {
