@@ -1,147 +1,102 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ProMapper — 프로젝터 매핑</title>
-<link rel="stylesheet" href="css/style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ProMap Sim — 프로젝션 매핑 3D 시뮬레이터</title>
+  <link rel="stylesheet" href="./src/style.css" />
 </head>
 <body>
-<header id="toolbar">
-  <div class="brand">Pro<span>Mapper</span></div>
+  <div id="app">
+    <header id="toolbar">
+      <div class="brand">ProMap<span>Sim</span></div>
 
-  <div class="mode-tabs">
-    <button id="modeOutput" class="tab active" title="출력(투사 위치) 편집">출력 편집</button>
-    <button id="modeInput" class="tab" title="입력(소스 영역) 편집">입력 편집</button>
-  </div>
+      <div class="tb-group">
+        <label>환경</label>
+        <select id="env-preset">
+          <option value="room">실내 벽면</option>
+          <option value="facade">건물 파사드</option>
+          <option value="curved">곡면 스크린</option>
+          <option value="stage">무대 + 오브젝트</option>
+        </select>
+      </div>
 
-  <div class="spacer"></div>
-
-  <label class="tb-field">출력 해상도
-    <select id="resSelect">
-      <option value="1280x720">1280 × 720</option>
-      <option value="1920x1080" selected>1920 × 1080</option>
-      <option value="2560x1440">2560 × 1440</option>
-      <option value="3840x2160">3840 × 2160</option>
-    </select>
-  </label>
-
-  <button id="btnFit" title="편집 뷰를 창에 맞춤 (단축키 F)">화면 맞춤</button>
-  <button id="btnOutput" class="primary" title="프로젝터로 보낼 별도 출력 창을 엽니다">프로젝터 출력 창</button>
-
-  <div class="divider"></div>
-
-  <button id="btnSave" title="프로젝트를 JSON 파일로 저장">저장</button>
-  <button id="btnLoad" title="저장한 프로젝트 불러오기">불러오기</button>
-  <input type="file" id="projectFile" accept=".json,application/json" hidden>
-</header>
-
-<div id="main">
-  <aside id="left">
-    <section class="panel">
-      <h3>미디어 <button id="btnAddMedia" class="mini" title="이미지/비디오 파일 추가">+ 파일</button></h3>
-      <input type="file" id="mediaFile" accept="image/*,video/*" hidden>
-      <div id="mediaList" class="list"></div>
-    </section>
-
-    <section class="panel">
-      <h3>서피스
-        <span>
-          <button id="btnAddQuad" class="mini" title="코너핀 쿼드 서피스 추가">+ 쿼드</button>
-          <button id="btnAddMesh" class="mini" title="그리드 워프 메시 서피스 추가">+ 메시</button>
-        </span>
-      </h3>
-      <div id="surfaceList" class="list"></div>
-    </section>
-  </aside>
-
-  <div id="editor">
-    <canvas id="gl"></canvas>
-    <canvas id="overlay"></canvas>
-  </div>
-
-  <aside id="right">
-    <section class="panel" id="props" hidden>
-      <h3>서피스 속성</h3>
-
-      <label class="field">이름
-        <input type="text" id="p_name">
-      </label>
-
-      <label class="field">미디어
-        <select id="p_media"></select>
-      </label>
-
-      <div class="field" id="meshRow" hidden>
-        <span>메시 격자</span>
-        <div class="inline">
-          <input type="number" id="p_cols" min="2" max="12" step="1"> ×
-          <input type="number" id="p_rows" min="2" max="12" step="1">
+      <div class="tb-group">
+        <label>표시 모드</label>
+        <div class="segmented" id="view-mode">
+          <button data-mode="0" class="active" title="프로젝터가 실제로 투사하는 영상 미리보기">투사</button>
+          <button data-mode="1" title="몇 대의 프로젝터가 각 영역을 덮는지 표시 (녹색 1대 / 황색 2대 / 적색 3대 이상)">커버리지</button>
+          <button data-mode="2" title="표면 조도(lux) 히트맵">조도</button>
         </div>
       </div>
 
-      <label class="field slider">불투명도 <output id="o_opacity"></output>
-        <input type="range" id="p_opacity" min="0" max="1" step="0.01">
-      </label>
-      <label class="field slider">밝기 <output id="o_brightness"></output>
-        <input type="range" id="p_brightness" min="0" max="2" step="0.01">
-      </label>
-      <label class="field slider">대비 <output id="o_contrast"></output>
-        <input type="range" id="p_contrast" min="0" max="2" step="0.01">
-      </label>
-      <label class="field slider">채도 <output id="o_saturation"></output>
-        <input type="range" id="p_saturation" min="0" max="2" step="0.01">
-      </label>
-      <label class="field">틴트
-        <input type="color" id="p_tint">
-      </label>
-
-      <h4>엣지 블렌딩</h4>
-      <label class="field slider">왼쪽 <output id="o_blendL"></output>
-        <input type="range" id="p_blendL" min="0" max="0.5" step="0.005">
-      </label>
-      <label class="field slider">오른쪽 <output id="o_blendR"></output>
-        <input type="range" id="p_blendR" min="0" max="0.5" step="0.005">
-      </label>
-      <label class="field slider">위 <output id="o_blendT"></output>
-        <input type="range" id="p_blendT" min="0" max="0.5" step="0.005">
-      </label>
-      <label class="field slider">아래 <output id="o_blendB"></output>
-        <input type="range" id="p_blendB" min="0" max="0.5" step="0.005">
-      </label>
-
-      <div class="btn-row">
-        <button id="btnResetDst" title="출력 코너를 사각형으로 초기화">출력 초기화</button>
-        <button id="btnResetSrc" title="입력 영역을 전체로 초기화">입력 초기화</button>
+      <div class="tb-group">
+        <label>테스트 패턴</label>
+        <select id="pattern-select">
+          <option value="0">그리드</option>
+          <option value="1">전체 화이트</option>
+          <option value="2">컬러바</option>
+        </select>
       </div>
-      <div class="btn-row">
-        <button id="btnDelete" class="danger">서피스 삭제</button>
+
+      <div class="tb-group">
+        <label class="chk"><input type="checkbox" id="blend-toggle" /> 에지 블렌드</label>
+        <input type="range" id="blend-ramp" min="2" max="30" value="12" title="블렌드 램프 폭 (%)" />
       </div>
-    </section>
 
-    <section class="panel hint">
-      <h3>사용법</h3>
-      <ul>
-        <li>서피스를 클릭해 선택, 코너를 드래그해 워핑</li>
-        <li>내부 드래그로 이동, 방향키 미세 이동 (Shift = 10px)</li>
-        <li>휠 = 줌, 휠 클릭/Space 드래그 = 이동</li>
-        <li><b>입력 편집</b> 탭에서 소스의 사용 영역 지정</li>
-        <li>출력 창에서 더블클릭 = 전체화면</li>
-      </ul>
-    </section>
-  </aside>
-</div>
+      <div class="tb-spacer"></div>
 
-<footer id="status">
-  <span id="statusRes"></span>
-  <span id="statusMouse"></span>
-  <span class="spacer"></span>
-  <span id="statusSel"></span>
-</footer>
+      <button id="btn-assistant" class="primary" title="투사면 크기와 목표 품질로 필요 대수/배치를 자동 산출">⚙ 세팅 도우미</button>
+      <button id="btn-save" title="프로젝트를 JSON 파일로 저장">저장</button>
+      <button id="btn-load" title="JSON 프로젝트 불러오기">불러오기</button>
+      <button id="btn-reset" title="기본 장면으로 초기화">초기화</button>
+      <input type="file" id="file-input" accept=".json" hidden />
+    </header>
 
-<script src="js/homography.js"></script>
-<script src="js/patterns.js"></script>
-<script src="js/renderer.js"></script>
-<script src="js/app.js"></script>
+    <aside id="left-panel">
+      <div class="panel-section">
+        <div class="panel-title">
+          프로젝터
+          <button id="btn-add-projector" class="mini primary" title="프로젝터 추가 (기본 기종)">＋ 추가</button>
+        </div>
+        <ul id="projector-list"></ul>
+      </div>
+      <div class="panel-section" id="env-panel">
+        <div class="panel-title">환경 설정</div>
+        <div id="env-controls"></div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-title">도움말</div>
+        <div class="help-text">
+          <b>마우스</b> 좌drag 회전 · 휠 줌 · 우drag 이동<br/>
+          <b>W</b> 이동 기즈모 · <b>E</b> 회전 기즈모<br/>
+          <b>F</b> 선택 프로젝터 포커스 · <b>Del</b> 삭제<br/>
+          <b>Ctrl+D</b> 복제 · 클릭으로 프로젝터 선택
+        </div>
+      </div>
+    </aside>
+
+    <main id="viewport"></main>
+
+    <aside id="right-panel">
+      <div id="props-empty" class="props-empty">
+        프로젝터를 선택하면<br/>속성이 표시됩니다
+      </div>
+      <div id="props-body" hidden></div>
+    </aside>
+
+    <footer id="status-bar">
+      <span id="metric-summary">프로젝터 0대</span>
+      <span id="metric-detail"></span>
+    </footer>
+
+    <div id="modal-backdrop" hidden>
+      <div id="assistant-modal">
+        <div class="modal-title">세팅 도우미 — 자동 대수/배치 산출</div>
+        <div class="modal-body" id="assistant-body"></div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>
