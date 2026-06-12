@@ -341,6 +341,7 @@ export function setupUI(app) {
     const ambLux = app.manager.globals.uAmbient.value * 400 + 5;
     const contrast = (m.lux + ambLux) / ambLux;
     const cClass = contrast >= 7 ? 'good' : contrast >= 3 ? 'warn' : 'bad';
+    const cText = contrast > 99 ? '99+ : 1' : `${contrast.toFixed(1)} : 1`;
     ui.metricDetail.textContent =
       `${p.data.name} · 투사거리 ${m.dist.toFixed(2)}m · 화면 ${m.w.toFixed(2)}×${m.h.toFixed(2)}m · ${m.pxPerM.toFixed(0)}px/m · ${m.lux.toFixed(0)}lx`;
     if (box) {
@@ -349,7 +350,7 @@ export function setupUI(app) {
         <div class="m-row"><span>화면 크기</span><span>${m.w.toFixed(2)} × ${m.h.toFixed(2)} m</span></div>
         <div class="m-row"><span>픽셀 밀도</span><span>${m.pxPerM.toFixed(0)} px/m</span></div>
         <div class="m-row"><span>표면 조도</span><span>${m.lux.toFixed(0)} lx</span></div>
-        <div class="m-row"><span>체감 명암비</span><span class="${cClass}">${contrast.toFixed(1)} : 1</span></div>
+        <div class="m-row"><span>체감 명암비</span><span class="${cClass}">${cText}</span></div>
       `;
     }
   };

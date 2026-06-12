@@ -159,6 +159,15 @@ class App {
       ...overrides
     });
     const p = new Projector(data);
+    // 위치 미지정 시: 현재 환경의 타깃 면을 향하도록 자동 배치 (겹침 방지 스태거)
+    if (overrides.position === undefined) {
+      const t = this.env.getTarget();
+      const dist = THREE.MathUtils.clamp(t.height * 1.5, 2.5, t.maxThrow);
+      const x = ((this.projectors.length % 5) - 2) * 1.2;
+      data.position = [x, THREE.MathUtils.clamp(t.centerY, 1.0, 6.0), t.z + dist];
+      p.syncFromData();
+      p.aimAt(new THREE.Vector3(0, t.centerY, t.z));
+    }
     this.scene.add(p.group);
     this.projectors.push(p);
     this._rebuildSlots();
@@ -173,10 +182,15 @@ class App {
   removeProjector(id) {
     const i = this.projectors.findIndex((p) => p.data.id === id);
     if (i < 0) return;
-    if (this.selectedId === id) this.select(null);
+    const wasSelected = this.selectedId === id;
+    if (wasSelected) this.select(null);
     this.projectors[i].dispose();
     this.projectors.splice(i, 1);
     this._rebuildSlots();
+    // 삭제 후 인접 프로젝터를 자동 선택해 작업 흐름 유지
+    if (wasSelected && this.projectors.length) {
+      this.select(this.projectors[Math.min(i, this.projectors.length - 1)].data.id);
+    }
     this.ui.refreshList();
     this.touch();
   }
@@ -201,6 +215,7 @@ class App {
     else this.transform.detach();
     this.ui.refreshList();
     this.ui.refreshProps(true);
+    this.ui.refreshMetrics();
   }
 
   changeSpec(id, specId) {
@@ -255,9 +270,15 @@ class App {
   applyPlan(plan) {
     while (this.projectors.length) this.removeProjector(this.projectors[0].data.id);
     this.seq = 0;
-    const spots = this.env.planPositions(plan.cols, plan.rows, plan.w, plan.h, plan.dist, plan.ov)
-      .slice(0, MAX_PROJECTORS);
-    for (const s of spots) {
+    const base = this.env.planPositions(plan.cols, plan.rows, plan.w, plan.h, plan.dist, plan.ov);
+    // 스택: 같은 조준점에 본체를 수직으로 겹쳐 밝기를 배가
+    const spots = [];
+    for (const s of base) {
+      for (let k = 0; k < (plan.stack || 1); k++) {
+        spots.push({ ...s, position: [s.position[0], s.position[1] + k * 0.4, s.position[2]] });
+      }
+    }
+    for (const s of spots.slice(0, MAX_PROJECTORS)) {
       this.addProjector({
         specId: plan.spec.id,
         lumens: plan.spec.lumens,
@@ -381,4 +402,5 @@ class App {
   }
 }
 
-new App();
+// 콘솔 디버깅/자동화 테스트용 핸들
+window.__app = new App();

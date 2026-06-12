@@ -4,7 +4,7 @@ export const MAX_PROJECTORS = 8;
 
 // 투사면 크기 + 목표 품질(픽셀 밀도/조도) → 필요 대수와 배치를 산출
 export function computePlan(input) {
-  const { W, H, spec, throwRatio, overlap: ov, targetPxm, ambientLux, maxThrow } = input;
+  const { W, H, spec, throwRatio, overlap: ov, targetPxm, ambientLux, maxThrow, targetContrast = 0 } = input;
   const aspect = spec.resX / spec.resY;
   const notes = [];
 
@@ -34,19 +34,30 @@ export function computePlan(input) {
     }
   }
 
-  // 밝기: 화이트 전체 기준 표면 조도와 주변광 대비 명암비
-  const lux = spec.lumens / (chosen.w * chosen.h);
+  // 밝기: 화이트 전체 기준 표면 조도. 해상도는 분할로, 밝기는 스택으로 해결(실무 관행)
+  const luxSingle = spec.lumens / (chosen.w * chosen.h);
+  let stack = 1;
+  if (targetContrast > 0) {
+    const neededLux = (targetContrast - 1) * ambientLux;
+    if (luxSingle < neededLux) {
+      stack = Math.ceil(neededLux / luxSingle);
+      if (stack > 3) {
+        stack = 3;
+        notes.push({ level: 'bad', text: '3단 스택으로도 목표 명암비에 미달합니다. 고휘도 기종으로 변경하거나 차광(주변광 저감)을 검토하세요.' });
+      } else {
+        notes.push({ level: 'warn', text: `목표 명암비 확보를 위해 위치당 ${stack}대 스택을 권장합니다.` });
+      }
+    }
+  }
+  const lux = luxSingle * stack;
   const contrast = (lux + ambientLux) / Math.max(ambientLux, 1);
   let grade;
   if (contrast >= 15) grade = { level: 'good', text: `우수 (${contrast.toFixed(1)} : 1)` };
   else if (contrast >= 7) grade = { level: 'good', text: `양호 (${contrast.toFixed(1)} : 1)` };
   else if (contrast >= 3) grade = { level: 'warn', text: `보통 (${contrast.toFixed(1)} : 1) — 콘텐츠 시인성 저하 가능` };
   else grade = { level: 'bad', text: `부족 (${contrast.toFixed(1)} : 1) — 더 밝은 기종/스택 또는 차광 필요` };
-  if (contrast < 7) {
-    notes.push({ level: 'warn', text: '명암비가 낮습니다. 동일 위치 2대 스택(밝기 2배) 또는 고휘도 기종을 검토하세요.' });
-  }
 
-  const total = chosen.rows * chosen.cols;
+  const total = chosen.rows * chosen.cols * stack;
   if (total > MAX_PROJECTORS) {
     notes.push({ level: 'warn', text: `필요 대수 ${total}대 중 시뮬레이터에는 최대 ${MAX_PROJECTORS}대까지만 배치됩니다.` });
   }
@@ -55,7 +66,7 @@ export function computePlan(input) {
   const span = chosen.w * (chosen.cols * (1 - ov) + ov);
   const over = ((span - W) / W) * 100;
 
-  return { ...chosen, tr, dist, lux, contrast, grade, total, span, over, notes, ov, spec };
+  return { ...chosen, tr, dist, lux, contrast, grade, total, stack, span, over, notes, ov, spec };
 }
 
 // ---------------- 모달 UI ----------------
@@ -85,6 +96,13 @@ export function setupAssistant(app) {
       <div class="prop-row"><label>블렌딩 오버랩 (%)</label><input type="number" id="as-ov" value="15" step="5" min="0" max="40"></div>
       <hr class="sep">
       <div class="prop-row"><label>목표 픽셀 밀도</label><input type="number" id="as-pxm" value="40" step="5" min="5"> <span style="color:var(--text-dim)">px/m</span></div>
+      <div class="prop-row"><label>목표 명암비</label>
+        <select id="as-contrast">
+          <option value="0">제약 없음 (대수 최소화)</option>
+          <option value="7" selected>7 : 1 — 발표·행사 권장</option>
+          <option value="15">15 : 1 — 전시 고품질</option>
+        </select>
+      </div>
       <div class="prop-row"><label>주변광 환경</label>
         <select id="as-amb">
           <option value="10">어두운 실내/야간 (10 lx)</option>
@@ -120,6 +138,7 @@ export function setupAssistant(app) {
         throwRatio: parseFloat(trInput.value) || (spec.tr[0] + spec.tr[1]) / 2,
         overlap: (parseFloat(form.querySelector('#as-ov').value) || 0) / 100,
         targetPxm: parseFloat(form.querySelector('#as-pxm').value) || 40,
+        targetContrast: parseFloat(form.querySelector('#as-contrast').value) || 0,
         ambientLux: parseFloat(form.querySelector('#as-amb').value),
         maxThrow: target.maxThrow
       });
@@ -135,7 +154,7 @@ export function setupAssistant(app) {
       .join('');
     el.innerHTML = `
       <div class="assist-result">
-        <h5>권장 구성: ${plan.cols} × ${plan.rows} = 총 ${plan.total}대</h5>
+        <h5>권장 구성: ${plan.cols} × ${plan.rows}${plan.stack > 1 ? ` × ${plan.stack}단 스택` : ''} = 총 ${plan.total}대</h5>
         <div>기종: ${spec.name}</div>
         <div>대당 화면: ${plan.w.toFixed(2)} × ${plan.h.toFixed(2)} m (오버랩 ${(plan.ov * 100).toFixed(0)}%)</div>
         <div>커버 폭: ${plan.span.toFixed(1)} m (${plan.over >= 0 ? '+' : ''}${plan.over.toFixed(0)}% ${plan.over >= 0 ? '여유' : '부족'})</div>
