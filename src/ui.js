@@ -1,4 +1,5 @@
 import { PROJECTOR_SPECS, getSpec } from './presets.js';
+import { OBJECT_TYPES } from './objects.js';
 
 // DOM 패널/툴바와 앱 상태를 연결한다.
 export function setupUI(app) {
@@ -40,6 +41,9 @@ export function setupUI(app) {
   blendRamp.addEventListener('input', syncBlend);
 
   document.getElementById('btn-add-projector').addEventListener('click', () => app.addProjector());
+  document.getElementById('btn-add-object').addEventListener('click', () => {
+    app.addObject(document.getElementById('obj-type').value);
+  });
   document.getElementById('btn-save').addEventListener('click', () => app.saveToFile());
   document.getElementById('btn-reset').addEventListener('click', () => {
     if (confirm('현재 장면을 버리고 기본 장면으로 초기화할까요?')) app.resetDefault();
@@ -115,7 +119,35 @@ export function setupUI(app) {
       });
       ui.listEl.appendChild(li);
     }
-    ui.metricSummary.textContent = `프로젝터 ${app.projectors.length}대`;
+    syncSummary();
+  };
+
+  function syncSummary() {
+    const objPart = app.objects.length ? ` · 오브젝트 ${app.objects.length}개` : '';
+    ui.metricSummary.textContent = `프로젝터 ${app.projectors.length}대${objPart}`;
+  }
+
+  // ---------- 오브젝트 리스트 ----------
+  ui.refreshObjectList = () => {
+    const el = document.getElementById('object-list');
+    el.innerHTML = '';
+    if (!app.objects.length) {
+      el.innerHTML = '<li class="empty-hint" style="cursor:default;border:none;background:none">위 ＋ 버튼으로 매핑 대상 오브젝트를 추가하세요</li>';
+    }
+    for (const o of app.objects) {
+      const li = document.createElement('li');
+      if (o.data.id === app.selectedObjectId) li.classList.add('selected');
+      li.innerHTML = `
+        <span class="dot" style="background:${o.data.color}"></span>
+        <span class="name">${o.data.name} <span class="sub">${OBJECT_TYPES[o.data.type].name}</span></span>
+      `;
+      li.addEventListener('click', () => {
+        app.selectObject(o.data.id);
+        if (ui.isMobile()) ui.openDrawer('right');
+      });
+      el.appendChild(li);
+    }
+    syncSummary();
   };
 
   // ---------- 환경 패널 ----------
@@ -193,7 +225,8 @@ export function setupUI(app) {
 
   ui.refreshProps = (force = false) => {
     const p = app.selectedProjector();
-    if (!p) {
+    const o = app.selectedObject();
+    if (!p && !o) {
       ui.propsEmpty.hidden = false;
       ui.propsBody.hidden = true;
       ui.propsBuiltFor = null;
@@ -202,9 +235,20 @@ export function setupUI(app) {
     ui.propsEmpty.hidden = true;
     ui.propsBody.hidden = false;
 
+    if (o) {
+      const key = `obj:${o.data.id}:${o.data.type}`;
+      if (!force && ui.propsBuiltFor === key) {
+        updatePoseFields(o.data);
+        return;
+      }
+      ui.propsBuiltFor = key;
+      buildObjectProps(o);
+      return;
+    }
+
     const key = `${p.data.id}:${p.data.specId}`;
     if (!force && ui.propsBuiltFor === key) {
-      updatePoseFields(p);
+      updatePoseFields(p.data);
       return;
     }
     ui.propsBuiltFor = key;
@@ -350,8 +394,97 @@ export function setupUI(app) {
     }
   }
 
-  function updatePoseFields(p) {
-    const d = p.data;
+  function buildObjectProps(o) {
+    const d = o.data;
+    const typeDef = OBJECT_TYPES[d.type];
+    ui.propsBody.innerHTML = '';
+    ui.fields = {};
+
+    const group = (title) => {
+      const div = document.createElement('div');
+      div.className = 'prop-group';
+      div.innerHTML = `<h4>${title}</h4>`;
+      ui.propsBody.appendChild(div);
+      return div;
+    };
+
+    // --- 일반 ---
+    const g1 = group(`오브젝트 — ${typeDef.name}`);
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.value = d.name;
+    nameInput.addEventListener('change', () => {
+      d.name = nameInput.value || d.name;
+      ui.refreshObjectList();
+      app.scheduleAutosave();
+    });
+    g1.appendChild(row('이름', nameInput));
+
+    const colorIn = document.createElement('input');
+    colorIn.type = 'color';
+    colorIn.value = d.color;
+    colorIn.addEventListener('input', () => {
+      d.color = colorIn.value;
+      o.mesh.material?.uniforms?.uBaseColor?.value.set(d.color);
+      app.touch();
+      ui.refreshObjectList();
+    });
+    g1.appendChild(row('표면 색상', colorIn, '투사면의 반사 기본색 — 밝을수록 영상이 잘 보입니다'));
+
+    // --- 크기 ---
+    const g2 = group('크기');
+    for (const param of typeDef.params) {
+      const input = numInput(d.size[param.key], 0.1, (v) => {
+        o.setSize({ [param.key]: Math.max(param.min, v) });
+        app.touch();
+      });
+      g2.appendChild(row(param.label, input));
+    }
+
+    // --- 위치 / 회전 ---
+    const g3 = group('위치 · 회전');
+    const posWrap = document.createElement('div');
+    posWrap.className = 'prop-row3';
+    ui.fields.pos = [0, 1, 2].map((i) => {
+      const input = numInput(d.position[i], 0.1, (v) => {
+        d.position[i] = v;
+        o.syncFromData();
+        app.touch();
+      });
+      posWrap.appendChild(input);
+      return input;
+    });
+    g3.appendChild(row('위치 XYZ (m)', posWrap));
+
+    const rotWrap = document.createElement('div');
+    rotWrap.className = 'prop-row3';
+    ui.fields.rot = ['pan', 'tilt', 'roll'].map((k) => {
+      const input = numInput(d[k], 1, (v) => {
+        d[k] = v;
+        o.syncFromData();
+        app.touch();
+      });
+      rotWrap.appendChild(input);
+      return input;
+    });
+    g3.appendChild(row('회전 Y/X/Z (°)', rotWrap));
+
+    // --- 동작 ---
+    const g4 = group('동작');
+    const btns = document.createElement('div');
+    btns.className = 'btn-row';
+    const dupBtn = document.createElement('button');
+    dupBtn.textContent = '복제';
+    dupBtn.addEventListener('click', () => app.duplicateObject(d.id));
+    const delBtn = document.createElement('button');
+    delBtn.textContent = '삭제';
+    delBtn.className = 'danger';
+    delBtn.addEventListener('click', () => app.removeObject(d.id));
+    btns.append(dupBtn, delBtn);
+    g4.appendChild(btns);
+  }
+
+  function updatePoseFields(d) {
     if (ui.fields.pos) {
       ui.fields.pos.forEach((input, i) => {
         if (document.activeElement !== input) input.value = round3(d.position[i]);
@@ -372,7 +505,7 @@ export function setupUI(app) {
       ui.metricDetail.textContent = '';
       return;
     }
-    const m = p.computeMetrics(app.env.receiverMeshes);
+    const m = p.computeMetrics(app.receiverMeshes);
     const box = ui.fields.metrics;
     if (!m) {
       ui.metricDetail.textContent = `${p.data.name}: 투사면에 닿지 않음`;

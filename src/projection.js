@@ -43,7 +43,7 @@ uniform sampler2D uDepth_${i};
         float distAxis = dot(toFrag, uFwd_${i});
         if (distAxis > 0.05) {
           vec3 dir = normalize(toFrag);
-          float facing = max(0.0, -dot(vWorldNormal, dir));
+          float facing = max(0.0, -dot(N, dir));
           float sampled = texture2D(uDepth_${i}, uv).x;
           float fragD = ndc.z * 0.5 + 0.5;
           float bias = 0.0006 + 0.0025 * (1.0 - facing);
@@ -125,13 +125,15 @@ vec3 heat(float t) {
 }
 
 void main() {
+  // 양면 재질(벽/판)도 빛을 받도록 보는 면 기준으로 법선 정렬
+  vec3 N = gl_FrontFacing ? vWorldNormal : -vWorldNormal;
   vec3 light = vec3(0.0);
   float totalLux = 0.0;
   float coverage = 0.0;
 
 ${blocks}
 
-  vec3 hemi = mix(vec3(0.62, 0.58, 0.55), vec3(1.0), vWorldNormal.y * 0.5 + 0.5);
+  vec3 hemi = mix(vec3(0.62, 0.58, 0.55), vec3(1.0), N.y * 0.5 + 0.5);
   vec3 base = uBaseColor * hemi;
   vec3 col;
 
@@ -222,6 +224,7 @@ export class ProjectionManager {
           ...this.shared
         }
       });
+      mat.side = r.side ?? THREE.FrontSide;
       r.mesh.material = mat;
       if (old && old.isShaderMaterial) old.dispose();
     }

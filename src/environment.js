@@ -44,7 +44,9 @@ export class Environment {
     build();
 
     this.scene.add(this.group);
-    this.manager.setReceivers(this.receivers);
+    // 앱이 커스텀 오브젝트와 합쳐 리시버를 갱신하도록 위임 (미설정 시 단독 등록)
+    if (this.onRebuilt) this.onRebuilt();
+    else this.manager.setReceivers(this.receivers);
   }
 
   get receiverMeshes() {

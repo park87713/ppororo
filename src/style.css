@@ -109,7 +109,25 @@ input[type="range"] { accent-color: var(--accent); width: 70px; }
   margin-bottom: 8px;
 }
 
-#projector-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.title-actions { display: flex; gap: 4px; align-items: center; }
+.title-actions select { max-width: 92px; }
+
+#projector-list, #object-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+#object-list li {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: var(--panel2);
+}
+#object-list li:hover { border-color: var(--border); }
+#object-list li.selected { border-color: var(--accent); background: #263042; }
+#object-list li .dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+#object-list li .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#object-list li .sub { color: var(--text-dim); font-size: 11px; }
+#object-list .empty-hint { color: var(--text-dim); font-size: 11px; padding: 2px 4px; }
+
 #projector-list li {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 8px;

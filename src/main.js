@@ -7,6 +7,7 @@ import { Projector, defaultProjectorData } from './projector.js';
 import { setupUI } from './ui.js';
 import { setupAssistant, MAX_PROJECTORS } from './assistant.js';
 import { PROJECTOR_COLORS, getSpec } from './presets.js';
+import { SceneObject, defaultObjectData, MAX_OBJECTS } from './objects.js';
 
 const AUTOSAVE_KEY = 'promap-sim-autosave';
 
@@ -14,14 +15,18 @@ class App {
   constructor() {
     this.viewport = document.getElementById('viewport');
     this.projectors = [];
+    this.objects = [];
     this.selectedId = null;
+    this.selectedObjectId = null;
     this.seq = 0;
+    this.objSeq = 0;
     this._autosaveTimer = null;
     this._frame = 0;
 
     this._initThree();
     this.manager = new ProjectionManager(this.renderer);
     this.env = new Environment(this.scene, this.manager);
+    this.env.onRebuilt = () => this.refreshReceivers();
 
     this.ui = setupUI(this);
     setupAssistant(this);
@@ -89,9 +94,14 @@ class App {
     });
     this.transform.addEventListener('objectChange', () => {
       const p = this.selectedProjector();
-      if (!p) return;
-      p.syncToData();
-      p.syncFromData();
+      if (p) {
+        p.syncToData();
+        p.syncFromData();
+      } else {
+        const o = this.selectedObject();
+        if (!o) return;
+        o.syncToData();
+      }
       this.touch();
       this.ui.refreshProps();
     });
@@ -117,11 +127,17 @@ class App {
         -((e.clientY - rect.top) / rect.height) * 2 + 1
       );
       ray.setFromCamera(ndc, this.camera);
-      const bodies = [];
-      for (const p of this.projectors) p.body.traverse((o) => { if (o.isMesh) bodies.push(o); });
-      const hits = ray.intersectObjects(bodies, false);
-      if (hits.length) this.select(hits[0].object.userData.projectorId);
-      else this.select(null);
+      const pickables = [];
+      for (const p of this.projectors) p.body.traverse((o) => { if (o.isMesh) pickables.push(o); });
+      for (const o of this.objects) pickables.push(o.mesh);
+      const hits = ray.intersectObjects(pickables, false);
+      if (!hits.length) {
+        this.select(null);
+        return;
+      }
+      const ud = hits[0].object.userData;
+      if (ud.projectorId != null) this.select(ud.projectorId);
+      else if (ud.objectId != null) this.selectObject(ud.objectId);
     });
   }
 
@@ -132,13 +148,15 @@ class App {
       if (e.key === 'w' || e.key === 'W') this.setGizmoMode('translate');
       else if (e.key === 'e' || e.key === 'E') this.setGizmoMode('rotate');
       else if (e.key === 'f' || e.key === 'F') {
-        const p = this.selectedProjector();
-        if (p) this.controls.target.copy(p.worldPosition());
+        const t = this.selectedProjector()?.worldPosition() || this.selectedObject()?.group.position;
+        if (t) this.controls.target.copy(t);
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (this.selectedId != null) this.removeProjector(this.selectedId);
+        if (this.selectedObjectId != null) this.removeObject(this.selectedObjectId);
+        else if (this.selectedId != null) this.removeProjector(this.selectedId);
       } else if ((e.key === 'd' || e.key === 'D') && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        if (this.selectedId != null) this.duplicateProjector(this.selectedId);
+        if (this.selectedObjectId != null) this.duplicateObject(this.selectedObjectId);
+        else if (this.selectedId != null) this.duplicateProjector(this.selectedId);
       }
     });
   }
@@ -215,13 +233,100 @@ class App {
 
   select(id) {
     this.selectedId = id;
+    this.selectedObjectId = null;
     for (const p of this.projectors) p.setSelected(p.data.id === id);
     const sel = this.selectedProjector();
     if (sel) this.transform.attach(sel.group);
     else this.transform.detach();
+    this._refreshSelectionUI();
+  }
+
+  _refreshSelectionUI() {
     this.ui.refreshList();
+    this.ui.refreshObjectList();
     this.ui.refreshProps(true);
     this.ui.refreshMetrics();
+  }
+
+  // ---------- 커스텀 오브젝트 ----------
+  selectedObject() {
+    return this.objects.find((o) => o.data.id === this.selectedObjectId) || null;
+  }
+
+  selectObject(id) {
+    this.selectedObjectId = id;
+    this.selectedId = null;
+    for (const p of this.projectors) p.setSelected(false);
+    const o = this.selectedObject();
+    if (o) this.transform.attach(o.group);
+    else this.transform.detach();
+    this._refreshSelectionUI();
+  }
+
+  addObject(type, overrides = {}, opts = {}) {
+    if (this.objects.length >= MAX_OBJECTS) {
+      alert(`오브젝트는 최대 ${MAX_OBJECTS}개까지 추가할 수 있습니다.`);
+      return null;
+    }
+    this.objSeq += 1;
+    const data = defaultObjectData(type, { name: `O${this.objSeq}`, ...overrides });
+    const o = new SceneObject(data);
+    // 위치 미지정 시: 타깃 면 앞 바닥 위에 스태거 배치
+    if (overrides.position === undefined) {
+      const t = this.env.getTarget();
+      data.position = [
+        ((this.objects.length % 5) - 2) * 1.6,
+        o.restHeight(),
+        t.z + Math.min(3, Math.max(1.5, t.maxThrow * 0.35))
+      ];
+      o.syncFromData();
+    }
+    this.scene.add(o.group);
+    this.objects.push(o);
+    this.refreshReceivers();
+    if (!opts.silent) {
+      this.selectObject(data.id);
+      this.touch();
+    }
+    return o;
+  }
+
+  removeObject(id) {
+    const i = this.objects.findIndex((o) => o.data.id === id);
+    if (i < 0) return;
+    if (this.selectedObjectId === id) this.selectObject(null);
+    this.objects[i].dispose();
+    this.objects.splice(i, 1);
+    this.refreshReceivers();
+    this.ui.refreshObjectList();
+    this.touch();
+  }
+
+  duplicateObject(id) {
+    const src = this.objects.find((o) => o.data.id === id);
+    if (!src) return;
+    const d = src.data;
+    const offset = (d.size.w ?? (d.size.r ?? 0.5) * 2) + 0.3;
+    this.addObject(d.type, {
+      ...structuredClone(d),
+      id: undefined,
+      name: undefined,
+      position: [d.position[0] + offset, d.position[1], d.position[2]]
+    });
+  }
+
+  // 환경 + 커스텀 오브젝트를 합쳐 투사 리시버 갱신
+  refreshReceivers() {
+    const objRecv = this.objects.map((o) => ({
+      mesh: o.mesh,
+      baseColor: o.data.color,
+      side: o.data.type === 'plane' ? THREE.DoubleSide : THREE.FrontSide
+    }));
+    this.manager.setReceivers([...this.env.receivers, ...objRecv]);
+  }
+
+  get receiverMeshes() {
+    return [...this.env.receiverMeshes, ...this.objects.map((o) => o.mesh)];
   }
 
   changeSpec(id, specId) {
@@ -314,12 +419,15 @@ class App {
         blendRamp: g.uBlendRamp.value
       },
       seq: this.seq,
-      projectors: this.projectors.map((p) => ({ ...p.data }))
+      objSeq: this.objSeq,
+      projectors: this.projectors.map((p) => ({ ...p.data })),
+      objects: this.objects.map((o) => structuredClone(o.data))
     };
   }
 
   loadProject(json, frame = true) {
     while (this.projectors.length) this.removeProjector(this.projectors[0].data.id);
+    while (this.objects.length) this.removeObject(this.objects[0].data.id);
     this.env.setPreset(json.env?.preset || 'room', json.env?.params);
     const g = this.manager.globals;
     const disp = json.display || {};
@@ -331,6 +439,11 @@ class App {
       this.addProjector({ ...d, id: undefined }, { silent: true });
     }
     this.seq = json.seq || this.projectors.length;
+    for (const d of json.objects || []) {
+      this.addObject(d.type, { ...d, id: undefined }, { silent: true });
+    }
+    this.objSeq = json.objSeq || this.objects.length;
+    this.ui.refreshObjectList();
     if (this.projectors.length) this.select(this.projectors[0].data.id);
     this.ui.refreshEnvPanel();
     this.ui.refreshList();
@@ -397,7 +510,7 @@ class App {
 
     // 프러스텀 길이/측정값은 10프레임마다 갱신 (레이캐스트 비용 절약)
     if (this._frame % 10 === 0) {
-      const meshes = this.env.receiverMeshes;
+      const meshes = this.receiverMeshes;
       for (const p of this.projectors) {
         if (p.data.id !== this.selectedId) p.computeMetrics(meshes);
       }
