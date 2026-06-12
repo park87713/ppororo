@@ -9,10 +9,12 @@ const DEPTH_MAP_SIZE = 1024;
 const VERTEX = /* glsl */ `
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
+varying vec2 vUv;
 void main() {
   vec4 wp = modelMatrix * vec4(position, 1.0);
   vWorldPos = wp.xyz;
   vWorldNormal = normalize(mat3(modelMatrix) * normal);
+  vUv = uv;
   gl_Position = projectionMatrix * viewMatrix * wp;
 }
 `;
@@ -74,6 +76,8 @@ uniform sampler2D uDepth_${i};
 
   return /* glsl */ `
 uniform vec3 uBaseColor;
+uniform sampler2D uMap;
+uniform float uHasMap;
 uniform float uAmbient;
 uniform int uViewMode;   // 0 투사, 1 커버리지, 2 조도
 uniform int uPattern;    // 0 그리드, 1 화이트, 2 컬러바
@@ -82,6 +86,7 @@ uniform float uExposure; // full white 로 매핑되는 lux
 
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
+varying vec2 vUv;
 
 ${uniforms}
 
@@ -134,7 +139,8 @@ void main() {
 ${blocks}
 
   vec3 hemi = mix(vec3(0.62, 0.58, 0.55), vec3(1.0), N.y * 0.5 + 0.5);
-  vec3 base = uBaseColor * hemi;
+  vec3 albedo = mix(uBaseColor, texture2D(uMap, vUv).rgb, uHasMap);
+  vec3 base = albedo * hemi;
   vec3 col;
 
   if (uViewMode == 1) {
@@ -220,6 +226,8 @@ export class ProjectionManager {
         fragmentShader: frag,
         uniforms: {
           uBaseColor: { value: new THREE.Color(r.baseColor) },
+          uMap: { value: r.map || null },
+          uHasMap: { value: r.map ? 1 : 0 },
           ...this.globals,
           ...this.shared
         }

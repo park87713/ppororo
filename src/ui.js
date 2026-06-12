@@ -64,6 +64,24 @@ export function setupUI(app) {
     if (f) app.importModelFile(f);
     modelInput.value = '';
   });
+
+  const photoInput = document.getElementById('photo-input');
+  const photoBtn = document.getElementById('btn-add-photo');
+  photoBtn.addEventListener('click', () => photoInput.click());
+  photoInput.addEventListener('change', () => {
+    const f = photoInput.files[0];
+    photoInput.value = '';
+    if (!f) return;
+    photoBtn.disabled = true;
+    app.importPhotoFile(f, (msg) => {
+      if (msg === null) {
+        photoBtn.disabled = false;
+        photoBtn.textContent = '사진→3D';
+      } else {
+        photoBtn.textContent = msg;
+      }
+    });
+  });
   document.getElementById('btn-save').addEventListener('click', () => app.saveToFile());
   document.getElementById('btn-reset').addEventListener('click', () => {
     if (confirm('현재 장면을 버리고 기본 장면으로 초기화할까요?')) app.resetDefault();
@@ -157,7 +175,9 @@ export function setupUI(app) {
     for (const o of app.objects) {
       const li = document.createElement('li');
       if (o.data.id === app.selectedObjectId) li.classList.add('selected');
-      const typeName = o.data.type === 'model' ? '모델' : OBJECT_TYPES[o.data.type].name;
+      const typeName = o.data.type === 'model' ? '모델'
+        : o.data.type === 'photo' ? '사진→3D'
+        : OBJECT_TYPES[o.data.type].name;
       li.innerHTML = `
         <span class="dot" style="background:${o.data.color || '#9aa1ac'}"></span>
         <span class="name">${o.data.name} <span class="sub">${typeName}</span></span>
@@ -418,7 +438,8 @@ export function setupUI(app) {
   function buildObjectProps(o) {
     const d = o.data;
     const isModel = d.type === 'model';
-    const typeDef = isModel ? null : OBJECT_TYPES[d.type];
+    const isPhoto = d.type === 'photo';
+    const typeDef = isModel || isPhoto ? null : OBJECT_TYPES[d.type];
     ui.propsBody.innerHTML = '';
     ui.fields = {};
 
@@ -431,7 +452,11 @@ export function setupUI(app) {
     };
 
     // --- 일반 ---
-    const g1 = group(isModel ? `모델 — ${d.fileName}` : `오브젝트 — ${typeDef.name}`);
+    const g1 = group(
+      isPhoto ? `사진 표면 — ${d.fileName}`
+        : isModel ? `모델 — ${d.fileName}`
+          : `오브젝트 — ${typeDef.name}`
+    );
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
     nameInput.value = d.name;
@@ -442,7 +467,7 @@ export function setupUI(app) {
     });
     g1.appendChild(row('이름', nameInput));
 
-    if (!isModel) {
+    if (!isModel && !isPhoto) {
       const colorIn = document.createElement('input');
       colorIn.type = 'color';
       colorIn.value = d.color;
@@ -457,7 +482,20 @@ export function setupUI(app) {
 
     // --- 크기 ---
     const g2 = group('크기');
-    if (isModel) {
+    if (isPhoto) {
+      const wInput = numInput(d.width, 0.1, (v) => {
+        d.width = Math.max(0.2, v);
+        o.rebuild();
+        app.touch();
+      });
+      g2.appendChild(row('폭 (m)', wInput, '사진 속 면의 실제 폭 — 높이는 종횡비로 자동'));
+      const dsInput = numInput(d.depthScale, 0.05, (v) => {
+        d.depthScale = v;
+        o.rebuild();
+        app.touch();
+      });
+      g2.appendChild(row('깊이 강도 (m)', dsInput, '릴리프 깊이 — 음수를 넣으면 요철이 반전됩니다'));
+    } else if (isModel) {
       const sizeInput = numInput(d.targetSize, 0.1, (v) => {
         d.targetSize = Math.max(0.1, v);
         o.applyScale();

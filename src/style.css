@@ -104,6 +104,7 @@ input[type="range"] { accent-color: var(--accent); width: 70px; }
 .panel-section { padding: 10px 12px; border-bottom: 1px solid var(--border); }
 .panel-title {
   display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 4px; row-gap: 6px;
   font-size: 12px; font-weight: 700; color: var(--text-dim);
   text-transform: uppercase; letter-spacing: 0.5px;
   margin-bottom: 8px;

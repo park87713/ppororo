@@ -87,9 +87,11 @@
             </select>
             <button id="btn-add-object" class="mini primary" title="현재 환경에 오브젝트 추가">＋</button>
             <button id="btn-add-model" class="mini" title="3D 모델 파일 불러오기 (.glb / .gltf / .obj / .stl)">모델</button>
+            <button id="btn-add-photo" class="mini" title="현장 사진 1장으로 3D 투사면 재구성 (AI 깊이 추정 — 브라우저 내 실행)">사진→3D</button>
           </span>
         </div>
         <input type="file" id="model-input" accept=".glb,.gltf,.obj,.stl" hidden />
+        <input type="file" id="photo-input" accept="image/*" hidden />
         <ul id="object-list"></ul>
       </div>
       <div class="panel-section" id="env-panel">

@@ -12,6 +12,10 @@ import {
   SceneObject, ModelObject, defaultObjectData, defaultModelData,
   parseModelFile, arrayBufferToBase64, base64ToArrayBuffer, MAX_OBJECTS
 } from './objects.js';
+import {
+  PhotoSurface, defaultPhotoData, fileToDataURLs, estimateDepthPNG,
+  loadImage, loadImageData
+} from './photo3d.js';
 
 const AUTOSAVE_KEY = 'promap-sim-autosave';
 
@@ -351,6 +355,14 @@ class App {
     const src = this.objects.find((o) => o.data.id === id);
     if (!src) return;
     const d = src.data;
+    if (d.type === 'photo') {
+      this._addPhotoFromData({
+        ...structuredClone(d),
+        id: undefined,
+        position: [d.position[0] + d.width + 0.3, d.position[1], d.position[2]]
+      }, { silent: false });
+      return;
+    }
     if (d.type === 'model') {
       this._addModelFromData({
         ...structuredClone(d),
@@ -367,6 +379,52 @@ class App {
       name: undefined,
       position: [d.position[0] + offset, d.position[1], d.position[2]]
     });
+  }
+
+  // ---------- 사진 → 3D 재구성 ----------
+  async importPhotoFile(file, onProgress) {
+    if (this.objects.length >= MAX_OBJECTS) {
+      alert(`오브젝트는 최대 ${MAX_OBJECTS}개까지 추가할 수 있습니다.`);
+      return;
+    }
+    try {
+      onProgress?.('사진 처리 중…');
+      const { texURL, modelURL } = await fileToDataURLs(file);
+      const depthB64 = await estimateDepthPNG(modelURL, onProgress);
+      onProgress?.('3D 표면 생성 중…');
+      await this._addPhotoFromData({
+        fileName: file.name,
+        photoB64: texURL,
+        depthB64
+      }, { silent: false });
+    } catch (e) {
+      console.error(e);
+      alert(`사진을 3D로 변환하지 못했습니다: ${e.message}\n(최초 1회 깊이 추정 모델(약 25MB)을 내려받아야 하므로 인터넷 연결이 필요합니다)`);
+    } finally {
+      onProgress?.(null);
+    }
+  }
+
+  async _addPhotoFromData(d, opts = {}) {
+    if (this.objects.length >= MAX_OBJECTS) return null;
+    const data = defaultPhotoData(d);
+    const [photoImage, depthData] = await Promise.all([
+      loadImage(data.photoB64),
+      loadImageData(data.depthB64)
+    ]);
+    const o = new PhotoSurface(data, photoImage, depthData);
+    if (d.position === undefined) {
+      const t = this.env.getTarget();
+      data.position = [0, o.restHeight(), t.z + Math.min(3, Math.max(1.5, t.maxThrow * 0.35))];
+      o.syncFromData();
+    }
+    this.scene.add(o.group);
+    this.objects.push(o);
+    this.refreshReceivers();
+    this.ui.refreshObjectList();
+    if (!opts.silent) this.selectObject(data.id);
+    this.touch();
+    return o;
   }
 
   // ---------- 3D 모델 불러오기 ----------
@@ -543,6 +601,7 @@ class App {
     this.seq = json.seq || this.projectors.length;
     for (const d of json.objects || []) {
       if (d.type === 'model') this._addModelFromData({ ...d, id: undefined }, { silent: true });
+      else if (d.type === 'photo') this._addPhotoFromData({ ...d, id: undefined }, { silent: true }).catch(console.error);
       else this.addObject(d.type, { ...d, id: undefined }, { silent: true });
     }
     this.objSeq = json.objSeq || this.objects.length;
