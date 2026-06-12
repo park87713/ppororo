@@ -1,0 +1,23 @@
+{
+  "name": "promap-sim",
+  "private": true,
+  "version": "0.1.0",
+  "description": "프로젝션 매핑 설계를 위한 3D 시뮬레이터",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "smoke": "node scripts/smoke.mjs",
+    "build:single": "vite build -c vite.config.single.js"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
+    "three": "0.160.1"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.1",
+    "vite": "^5.4.0",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}
