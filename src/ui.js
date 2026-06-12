@@ -32,6 +32,19 @@ export function setupUI(app) {
     app.manager.globals.uPattern.value = parseInt(e.target.value, 10);
   });
 
+  ui.syncSplitButtons = () => {
+    document.querySelectorAll('#split-mode button').forEach((b) => {
+      b.classList.toggle('active', parseInt(b.dataset.n, 10) === (app.views?.layout || 1));
+    });
+  };
+  document.querySelectorAll('#split-mode button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      app.views.setLayout(parseInt(btn.dataset.n, 10));
+      ui.syncSplitButtons();
+      app.scheduleAutosave();
+    });
+  });
+
   const blendToggle = document.getElementById('blend-toggle');
   const blendRamp = document.getElementById('blend-ramp');
   const syncBlend = () => {
@@ -557,6 +570,7 @@ export function setupUI(app) {
     document.getElementById('pattern-select').value = String(g.uPattern.value);
     blendToggle.checked = g.uBlendRamp.value > 0;
     if (g.uBlendRamp.value > 0) blendRamp.value = Math.round(g.uBlendRamp.value * 100);
+    ui.syncSplitButtons();
   };
 
   return ui;

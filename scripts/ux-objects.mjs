@@ -67,7 +67,7 @@ const boxPx = await page.evaluate(() => {
   const r = app.renderer.domElement.getBoundingClientRect();
   return { x: (v.x * 0.5 + 0.5) * r.width, y: (-v.y * 0.5 + 0.5) * r.height };
 });
-await page.click('#viewport canvas', { position: { x: Math.round(boxPx.x), y: Math.round(boxPx.y) } });
+await page.click('#panes', { position: { x: Math.round(boxPx.x), y: Math.round(boxPx.y) } });
 await page.waitForTimeout(400);
 const picked = await page.evaluate(() => window.__app.selectedObject()?.data.name || null);
 step(`캔버스 클릭 선택: ${picked} (O1 기대)`);

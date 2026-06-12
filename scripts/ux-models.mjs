@@ -161,7 +161,7 @@ const px = await page.evaluate(() => {
   const r = app.renderer.domElement.getBoundingClientRect();
   return { x: (v.x * 0.5 + 0.5) * r.width, y: (-v.y * 0.5 + 0.5) * r.height };
 });
-await page.click('#viewport canvas', { position: { x: Math.round(px.x), y: Math.round(px.y) } });
+await page.click('#panes', { position: { x: Math.round(px.x), y: Math.round(px.y) } });
 await page.waitForTimeout(400);
 step(`캔버스 클릭 선택: ${await page.evaluate(() => window.__app.selectedObject()?.data.name || null)} (O1 기대)`);
 

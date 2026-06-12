@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { ViewManager } from './views.js';
 import { ProjectionManager } from './projection.js';
 import { Environment } from './environment.js';
 import { Projector, defaultProjectorData } from './projector.js';
@@ -36,7 +36,24 @@ class App {
     setupAssistant(this);
     setupBlendPanel(this);
 
-    this._initGizmo();
+    // 기즈모 변경 핸들러 (분할창 전환 시 재바인딩되어도 재사용)
+    this._onTransformChange = () => {
+      const p = this.selectedProjector();
+      if (p) {
+        p.syncToData();
+        p.syncFromData();
+      } else {
+        const o = this.selectedObject();
+        if (!o) return;
+        o.syncToData();
+      }
+      this.touch();
+      this.ui.refreshProps();
+    };
+    this.transform = null;
+    this.transformPane = null;
+
+    this.views = new ViewManager(this);
     this._initPicking();
     this._initKeyboard();
 
@@ -50,20 +67,17 @@ class App {
   _initThree() {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.viewport.appendChild(this.renderer.domElement);
+    // 분할창 오버레이(#panes)·툴 버튼 아래에 깔리도록 맨 앞에 삽입
+    this.viewport.prepend(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0e1013);
 
-    this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 2000);
-    this.camera.position.set(9, 6, 11);
-    this.camera.layers.enable(1);
-
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.target.set(0, 1.5, -1);
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.12;
-    this.controls.maxPolarAngle = Math.PI * 0.52;
+    // 메인 자유 시점 카메라 — 0번 분할창이 '자유'일 때 공유됨
+    this.freeCamera = new THREE.PerspectiveCamera(55, 1, 0.1, 2000);
+    this.freeCamera.position.set(9, 6, 11);
+    this.freeCamera.layers.enable(1);
+    this._lastFreeTarget = new THREE.Vector3(0, 1.5, -1);
 
     // 프로젝터 본체 등 일반 재질용 조명 (투사면은 자체 셰이더로 계산)
     const hemi = new THREE.HemisphereLight(0xcdd9e5, 0x3c3c40, 1.4);
@@ -82,56 +96,81 @@ class App {
       const h = this.viewport.clientHeight;
       if (!w || !h) return;
       this.renderer.setSize(w, h);
-      this.camera.aspect = w / h;
-      this.camera.updateProjectionMatrix();
+      this.views?.resize();
     };
     new ResizeObserver(resize).observe(this.viewport);
     resize();
   }
 
-  _initGizmo() {
-    this.transform = new TransformControls(this.camera, this.renderer.domElement);
-    this.transform.setSize(0.85);
-    this.transform.traverse((o) => o.layers.set(1));
-    this.transform.getRaycaster().layers.enable(1);
-    this.transform.addEventListener('dragging-changed', (e) => {
-      this.controls.enabled = !e.value;
+  // 현재 '자유' 분할창의 카메라/컨트롤 (기존 코드·테스트 호환용 별칭)
+  get camera() {
+    const p = this.views?.panes.find((x) => x.type === 'free');
+    return p ? p.camera : this.freeCamera;
+  }
+
+  get controls() {
+    const p = this.views?.panes.find((x) => x.type === 'free');
+    return p?.controls || null;
+  }
+
+  // 분할창 전환 시 기즈모를 해당 창의 카메라/영역으로 재생성
+  _createTransform(pane) {
+    const old = this.transform;
+    const attached = old?.object || null;
+    const mode = old?.mode || 'translate';
+    if (old) {
+      old.detach();
+      this.scene.remove(old);
+      old.dispose();
+    }
+    this.transform = null;
+    this.transformPane = null;
+    if (!pane || pane.type === 'projector') return;
+    const t = new TransformControls(pane.camera, pane.el);
+    t.setSize(0.85);
+    t.traverse((o) => o.layers.set(1));
+    t.getRaycaster().layers.enable(1);
+    t.setMode(mode);
+    t.addEventListener('dragging-changed', (e) => {
+      if (this.transformPane?.controls) this.transformPane.controls.enabled = !e.value;
     });
-    this.transform.addEventListener('objectChange', () => {
-      const p = this.selectedProjector();
-      if (p) {
-        p.syncToData();
-        p.syncFromData();
-      } else {
-        const o = this.selectedObject();
-        if (!o) return;
-        o.syncToData();
-      }
-      this.touch();
-      this.ui.refreshProps();
-    });
-    this.scene.add(this.transform);
+    t.addEventListener('objectChange', this._onTransformChange);
+    this.scene.add(t);
+    if (attached) t.attach(attached);
+    this.transform = t;
+    this.transformPane = pane;
+    this.ui?.syncGizmoButtons(mode);
+  }
+
+  onPaneActivate(pane) {
+    if (this.transform?.dragging) return;
+    if (this.transformPane === pane && this.transform) return;
+    this._createTransform(pane);
+  }
+
+  onPaneStructureChanged(firstPane) {
+    // ViewManager 생성 도중에도 호출되므로 this.views 대신 인자를 사용
+    this._createTransform(firstPane);
   }
 
   _initPicking() {
-    const dom = this.renderer.domElement;
     const ray = new THREE.Raycaster();
     let downPos = null;
-    dom.addEventListener('pointerdown', (e) => {
-      downPos = [e.clientX, e.clientY];
+    const el = this.views.panesEl;
+    el.addEventListener('pointerdown', (e) => {
+      downPos = e.target.closest('.pane-head') ? null : [e.clientX, e.clientY];
     });
-    dom.addEventListener('pointerup', (e) => {
+    el.addEventListener('pointerup', (e) => {
       if (!downPos) return;
       const moved = Math.hypot(e.clientX - downPos[0], e.clientY - downPos[1]);
       downPos = null;
       // 터치는 손떨림 여유를 더 줌
-      if (moved > (e.pointerType === 'touch' ? 12 : 5) || this.transform.dragging) return;
-      const rect = dom.getBoundingClientRect();
-      const ndc = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
-      );
-      ray.setFromCamera(ndc, this.camera);
+      if (moved > (e.pointerType === 'touch' ? 12 : 5) || this.transform?.dragging) return;
+      const hit = this.views.paneAt(e.clientX, e.clientY);
+      if (!hit) return;
+      const cam = this.views.cameraFor(hit.pane);
+      if (!cam) return;
+      ray.setFromCamera(hit.ndc, cam);
       const pickables = [];
       for (const p of this.projectors) p.body.traverse((o) => { if (o.isMesh) pickables.push(o); });
       for (const o of this.objects) pickables.push(...o.meshes);
@@ -154,7 +193,7 @@ class App {
       else if (e.key === 'e' || e.key === 'E') this.setGizmoMode('rotate');
       else if (e.key === 'f' || e.key === 'F') {
         const t = this.selectedProjector()?.worldPosition() || this.selectedObject()?.group.position;
-        if (t) this.controls.target.copy(t);
+        if (t && this.controls) this.controls.target.copy(t);
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         if (this.selectedObjectId != null) this.removeObject(this.selectedObjectId);
         else if (this.selectedId != null) this.removeProjector(this.selectedId);
@@ -167,7 +206,7 @@ class App {
   }
 
   setGizmoMode(mode) {
-    this.transform.setMode(mode);
+    this.transform?.setMode(mode);
     this.ui.syncGizmoButtons(mode);
   }
 
@@ -241,8 +280,8 @@ class App {
     this.selectedObjectId = null;
     for (const p of this.projectors) p.setSelected(p.data.id === id);
     const sel = this.selectedProjector();
-    if (sel) this.transform.attach(sel.group);
-    else this.transform.detach();
+    if (sel) this.transform?.attach(sel.group);
+    else this.transform?.detach();
     this._refreshSelectionUI();
   }
 
@@ -251,6 +290,7 @@ class App {
     this.ui.refreshObjectList();
     this.ui.refreshProps(true);
     this.ui.refreshMetrics();
+    this.views?.refreshProjectorLabels();
   }
 
   // ---------- 커스텀 오브젝트 ----------
@@ -263,8 +303,8 @@ class App {
     this.selectedId = null;
     for (const p of this.projectors) p.setSelected(false);
     const o = this.selectedObject();
-    if (o) this.transform.attach(o.group);
-    else this.transform.detach();
+    if (o) this.transform?.attach(o.group);
+    else this.transform?.detach();
     this._refreshSelectionUI();
   }
 
@@ -431,8 +471,10 @@ class App {
   frameView() {
     const t = this.env.getTarget();
     const d = Math.max(t.width, t.height);
-    this.controls.target.set(0, t.centerY, t.z + 1);
-    this.camera.position.set(d * 0.5, t.centerY + d * 0.4, t.z + Math.min(d * 1.3 + 4, 70));
+    this._lastFreeTarget = new THREE.Vector3(0, t.centerY, t.z + 1);
+    if (this.controls) this.controls.target.copy(this._lastFreeTarget);
+    this.freeCamera.position.set(d * 0.5, t.centerY + d * 0.4, t.z + Math.min(d * 1.3 + 4, 70));
+    this.views?.frameAllOrtho();
   }
 
   // ---------- 세팅 도우미 적용 ----------
@@ -474,7 +516,8 @@ class App {
         ambient: g.uAmbient.value,
         viewMode: g.uViewMode.value,
         pattern: g.uPattern.value,
-        blendRamp: g.uBlendRamp.value
+        blendRamp: g.uBlendRamp.value,
+        split: this.views.serialize()
       },
       seq: this.seq,
       objSeq: this.objSeq,
@@ -493,6 +536,7 @@ class App {
     g.uViewMode.value = disp.viewMode ?? 0;
     g.uPattern.value = disp.pattern ?? 0;
     g.uBlendRamp.value = disp.blendRamp ?? 0;
+    if (disp.split) this.views.applyState(disp.split);
     for (const d of json.projectors || []) {
       this.addProjector({ ...d, id: undefined }, { silent: true });
     }
@@ -562,7 +606,7 @@ class App {
   _animate() {
     requestAnimationFrame(this._animate);
     this._frame += 1;
-    this.controls.update();
+    this.views.update();
 
     for (const p of this.projectors) p.applyToUniforms(this.manager);
     this.manager.renderDepthMaps(this.scene, this.projectors);
@@ -576,7 +620,7 @@ class App {
       this.ui.refreshMetrics();
     }
 
-    this.renderer.render(this.scene, this.camera);
+    this.views.render(this.renderer, this.scene);
   }
 }
 

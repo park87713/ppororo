@@ -32,6 +32,16 @@
       </div>
 
       <div class="tb-group">
+        <label>분할</label>
+        <div class="segmented" id="split-mode">
+          <button data-n="1" class="active" title="단일 뷰">1</button>
+          <button data-n="2" title="좌/우 2분할">2</button>
+          <button data-n="3" title="메인 + 보조 2개">3</button>
+          <button data-n="4" title="쿼드 뷰 (자유/상면/정면/측면)">4</button>
+        </div>
+      </div>
+
+      <div class="tb-group">
         <label>테스트 패턴</label>
         <select id="pattern-select">
           <option value="0">그리드</option>
@@ -98,6 +108,7 @@
     </aside>
 
     <main id="viewport">
+      <div id="panes"></div>
       <div id="viewport-tools">
         <button id="vt-move" class="active" title="이동 기즈모 (W)">이동</button>
         <button id="vt-rotate" title="회전 기즈모 (E)">회전</button>

@@ -109,7 +109,7 @@ const projPx = await page.evaluate(() => {
   return { x: (v.x * 0.5 + 0.5) * r.width, y: (-v.y * 0.5 + 0.5) * r.height };
 });
 await page.evaluate(() => window.__app.select(null));
-await page.tap('#viewport canvas', { position: { x: Math.round(projPx.x), y: Math.round(projPx.y) } });
+await page.tap('#panes', { position: { x: Math.round(projPx.x), y: Math.round(projPx.y) } });
 await page.waitForTimeout(400);
 const tappedSel = await page.evaluate(() => window.__app.selectedProjector()?.data.name || null);
 step(`캔버스 본체 탭 선택: ${tappedSel}`);
