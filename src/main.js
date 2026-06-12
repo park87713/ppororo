@@ -109,7 +109,8 @@ class App {
       if (!downPos) return;
       const moved = Math.hypot(e.clientX - downPos[0], e.clientY - downPos[1]);
       downPos = null;
-      if (moved > 5 || this.transform.dragging) return;
+      // 터치는 손떨림 여유를 더 줌
+      if (moved > (e.pointerType === 'touch' ? 12 : 5) || this.transform.dragging) return;
       const rect = dom.getBoundingClientRect();
       const ndc = new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -128,8 +129,8 @@ class App {
     window.addEventListener('keydown', (e) => {
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
-      if (e.key === 'w' || e.key === 'W') this.transform.setMode('translate');
-      else if (e.key === 'e' || e.key === 'E') this.transform.setMode('rotate');
+      if (e.key === 'w' || e.key === 'W') this.setGizmoMode('translate');
+      else if (e.key === 'e' || e.key === 'E') this.setGizmoMode('rotate');
       else if (e.key === 'f' || e.key === 'F') {
         const p = this.selectedProjector();
         if (p) this.controls.target.copy(p.worldPosition());
@@ -140,6 +141,11 @@ class App {
         if (this.selectedId != null) this.duplicateProjector(this.selectedId);
       }
     });
+  }
+
+  setGizmoMode(mode) {
+    this.transform.setMode(mode);
+    this.ui.syncGizmoButtons(mode);
   }
 
   // ---------- 프로젝터 관리 ----------

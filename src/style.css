@@ -20,26 +20,33 @@ body {
   background: var(--bg);
   color: var(--text);
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 #app {
   display: grid;
-  grid-template-rows: 46px 1fr 28px;
+  grid-template-rows: auto 1fr 28px;
   grid-template-columns: 250px 1fr 280px;
   grid-template-areas:
     "toolbar toolbar toolbar"
     "left viewport right"
     "status status status";
   height: 100vh;
+  height: 100dvh;
 }
+
+.mobile-only { display: none; }
+.icon-btn { font-size: 15px; padding: 5px 12px; }
 
 /* ---------- Toolbar ---------- */
 #toolbar {
   grid-area: toolbar;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 0 12px;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  min-height: 46px;
+  padding: 6px 12px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
 }
@@ -124,7 +131,22 @@ input[type="range"] { accent-color: var(--accent); width: 70px; }
 
 /* ---------- Viewport ---------- */
 #viewport { grid-area: viewport; position: relative; min-width: 0; min-height: 0; }
-#viewport canvas { display: block; }
+#viewport canvas { display: block; touch-action: none; }
+
+#viewport-tools {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+}
+#viewport-tools button {
+  background: rgba(29, 32, 38, 0.85);
+  backdrop-filter: blur(4px);
+  padding: 7px 14px;
+}
+#viewport-tools button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 /* ---------- Properties ---------- */
 .props-empty { padding: 30px 16px; text-align: center; color: var(--text-dim); line-height: 1.8; }
@@ -217,3 +239,61 @@ hr.sep { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #3a3f48; border-radius: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- 모바일 (≤900px): 패널을 슬라이드 드로어로 전환 ---------- */
+#drawer-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 40;
+}
+#drawer-backdrop[hidden] { display: none; }
+
+@media (max-width: 900px) {
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "toolbar"
+      "viewport"
+      "status";
+  }
+
+  .mobile-only { display: inline-block; }
+
+  /* 툴바: 한 줄 가로 스크롤, 패널 토글은 양끝 고정 */
+  #toolbar { flex-wrap: nowrap; overflow-x: auto; gap: 8px; padding: 6px 8px; scrollbar-width: none; }
+  #toolbar::-webkit-scrollbar { display: none; }
+  #toolbar .brand { display: none; }
+  #toolbar .tb-group { flex-shrink: 0; }
+  #toolbar .tb-group > label { display: none; }
+  #toolbar button { flex-shrink: 0; }
+  .chk { white-space: nowrap; }
+  #btn-panel-left { position: sticky; left: 0; z-index: 2; background: var(--panel); }
+  #btn-panel-right { position: sticky; right: 0; z-index: 2; background: var(--panel); }
+
+  /* iOS 입력 포커스 자동 줌 방지 */
+  select, input[type="number"], input[type="text"] { font-size: 16px; }
+  button { padding: 7px 12px; }
+
+  #left-panel, #right-panel {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    width: min(85vw, 320px);
+    z-index: 50;
+    transition: transform 0.25s ease;
+    border: none;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.6);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  #left-panel { left: 0; transform: translateX(-105%); }
+  #right-panel { right: 0; transform: translateX(105%); }
+  #left-panel.open, #right-panel.open { transform: translateX(0); }
+
+  #viewport-tools button { padding: 10px 16px; font-size: 14px; }
+
+  #status-bar { gap: 12px; overflow-x: auto; }
+  #status-bar span { flex-shrink: 0; }
+
+  #assistant-modal { width: min(460px, 94vw); max-height: 86dvh; }
+  .modal-body .prop-row { flex-wrap: wrap; }
+}

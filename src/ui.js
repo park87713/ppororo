@@ -60,6 +60,43 @@ export function setupUI(app) {
     fileInput.value = '';
   });
 
+  // ---------- 모바일 드로어 / 뷰포트 툴 ----------
+  const leftPanel = document.getElementById('left-panel');
+  const rightPanel = document.getElementById('right-panel');
+  const drawerBackdrop = document.getElementById('drawer-backdrop');
+  ui.isMobile = () => window.matchMedia('(max-width: 900px)').matches;
+
+  const syncBackdrop = () => {
+    drawerBackdrop.hidden = !(leftPanel.classList.contains('open') || rightPanel.classList.contains('open'));
+  };
+  ui.closeDrawers = () => {
+    leftPanel.classList.remove('open');
+    rightPanel.classList.remove('open');
+    syncBackdrop();
+  };
+  ui.openDrawer = (side) => {
+    leftPanel.classList.toggle('open', side === 'left');
+    rightPanel.classList.toggle('open', side === 'right');
+    syncBackdrop();
+  };
+  document.getElementById('btn-panel-left').addEventListener('click', () => {
+    leftPanel.classList.contains('open') ? ui.closeDrawers() : ui.openDrawer('left');
+  });
+  document.getElementById('btn-panel-right').addEventListener('click', () => {
+    rightPanel.classList.contains('open') ? ui.closeDrawers() : ui.openDrawer('right');
+  });
+  drawerBackdrop.addEventListener('click', ui.closeDrawers);
+
+  const vtMove = document.getElementById('vt-move');
+  const vtRotate = document.getElementById('vt-rotate');
+  ui.syncGizmoButtons = (mode) => {
+    vtMove.classList.toggle('active', mode === 'translate');
+    vtRotate.classList.toggle('active', mode === 'rotate');
+  };
+  vtMove.addEventListener('click', () => app.setGizmoMode('translate'));
+  vtRotate.addEventListener('click', () => app.setGizmoMode('rotate'));
+  document.getElementById('vt-aim').addEventListener('click', () => app.aimSelectedAtTarget());
+
   // ---------- 프로젝터 리스트 ----------
   ui.refreshList = () => {
     ui.listEl.innerHTML = '';
@@ -71,7 +108,11 @@ export function setupUI(app) {
         <span class="name">${p.data.name}<br><span class="sub">${getSpec(p.data.specId).name}</span></span>
         <span class="pwr ${p.data.on ? '' : 'off'}">${p.data.on ? 'ON' : 'OFF'}</span>
       `;
-      li.addEventListener('click', () => app.select(p.data.id));
+      li.addEventListener('click', () => {
+        app.select(p.data.id);
+        // 모바일: 목록에서 고르면 바로 속성 드로어로 전환
+        if (ui.isMobile()) ui.openDrawer('right');
+      });
       ui.listEl.appendChild(li);
     }
     ui.metricSummary.textContent = `프로젝터 ${app.projectors.length}대`;

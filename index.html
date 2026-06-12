@@ -2,13 +2,14 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>ProMap Sim — 프로젝션 매핑 3D 시뮬레이터</title>
   <link rel="stylesheet" href="./src/style.css" />
 </head>
 <body>
   <div id="app">
     <header id="toolbar">
+      <button id="btn-panel-left" class="icon-btn mobile-only" title="프로젝터 / 환경 패널 열기">☰</button>
       <div class="brand">ProMap<span>Sim</span></div>
 
       <div class="tb-group">
@@ -50,6 +51,7 @@
       <button id="btn-save" title="프로젝트를 JSON 파일로 저장">저장</button>
       <button id="btn-load" title="JSON 프로젝트 불러오기">불러오기</button>
       <button id="btn-reset" title="기본 장면으로 초기화">초기화</button>
+      <button id="btn-panel-right" class="icon-btn mobile-only" title="선택 프로젝터 속성 열기">속성</button>
       <input type="file" id="file-input" accept=".json" hidden />
     </header>
 
@@ -76,7 +78,15 @@
       </div>
     </aside>
 
-    <main id="viewport"></main>
+    <main id="viewport">
+      <div id="viewport-tools">
+        <button id="vt-move" class="active" title="이동 기즈모 (W)">이동</button>
+        <button id="vt-rotate" title="회전 기즈모 (E)">회전</button>
+        <button id="vt-aim" title="선택 프로젝터를 주 투사면 중심으로 정조준">정조준</button>
+      </div>
+    </main>
+
+    <div id="drawer-backdrop" hidden></div>
 
     <aside id="right-panel">
       <div id="props-empty" class="props-empty">
