@@ -6,6 +6,7 @@ import { Environment } from './environment.js';
 import { Projector, defaultProjectorData } from './projector.js';
 import { setupUI } from './ui.js';
 import { setupAssistant, MAX_PROJECTORS } from './assistant.js';
+import { setupBlendPanel } from './blending.js';
 import { PROJECTOR_COLORS, getSpec } from './presets.js';
 import {
   SceneObject, ModelObject, defaultObjectData, defaultModelData,
@@ -33,6 +34,7 @@ class App {
 
     this.ui = setupUI(this);
     setupAssistant(this);
+    setupBlendPanel(this);
 
     this._initGizmo();
     this._initPicking();

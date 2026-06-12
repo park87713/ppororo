@@ -43,6 +43,7 @@
       <div class="tb-group">
         <label class="chk"><input type="checkbox" id="blend-toggle" /> 에지 블렌드</label>
         <input type="range" id="blend-ramp" min="2" max="30" value="12" title="블렌드 램프 폭 (%)" />
+        <button id="btn-blend-calc" class="mini" title="프로젝터 쌍별 오버랩 폭(m/%/px)을 실측 분석">계산</button>
       </div>
 
       <div class="tb-spacer"></div>
@@ -122,6 +123,10 @@
       <div id="assistant-modal">
         <div class="modal-title">세팅 도우미 — 자동 대수/배치 산출</div>
         <div class="modal-body" id="assistant-body"></div>
+      </div>
+      <div id="blend-modal" hidden>
+        <div class="modal-title">엣지 블렌딩 분석 — 쌍별 오버랩 실측</div>
+        <div class="modal-body" id="blend-body"></div>
       </div>
     </div>
   </div>
