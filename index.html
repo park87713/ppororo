@@ -75,8 +75,10 @@
               <option value="plane">벽 / 판</option>
             </select>
             <button id="btn-add-object" class="mini primary" title="현재 환경에 오브젝트 추가">＋</button>
+            <button id="btn-add-model" class="mini" title="3D 모델 파일 불러오기 (.glb / .gltf / .obj / .stl)">모델</button>
           </span>
         </div>
+        <input type="file" id="model-input" accept=".glb,.gltf,.obj,.stl" hidden />
         <ul id="object-list"></ul>
       </div>
       <div class="panel-section" id="env-panel">

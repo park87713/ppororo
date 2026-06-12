@@ -7,7 +7,10 @@ import { Projector, defaultProjectorData } from './projector.js';
 import { setupUI } from './ui.js';
 import { setupAssistant, MAX_PROJECTORS } from './assistant.js';
 import { PROJECTOR_COLORS, getSpec } from './presets.js';
-import { SceneObject, defaultObjectData, MAX_OBJECTS } from './objects.js';
+import {
+  SceneObject, ModelObject, defaultObjectData, defaultModelData,
+  parseModelFile, arrayBufferToBase64, base64ToArrayBuffer, MAX_OBJECTS
+} from './objects.js';
 
 const AUTOSAVE_KEY = 'promap-sim-autosave';
 
@@ -129,7 +132,7 @@ class App {
       ray.setFromCamera(ndc, this.camera);
       const pickables = [];
       for (const p of this.projectors) p.body.traverse((o) => { if (o.isMesh) pickables.push(o); });
-      for (const o of this.objects) pickables.push(o.mesh);
+      for (const o of this.objects) pickables.push(...o.meshes);
       const hits = ray.intersectObjects(pickables, false);
       if (!hits.length) {
         this.select(null);
@@ -306,6 +309,15 @@ class App {
     const src = this.objects.find((o) => o.data.id === id);
     if (!src) return;
     const d = src.data;
+    if (d.type === 'model') {
+      this._addModelFromData({
+        ...structuredClone(d),
+        id: undefined,
+        name: undefined,
+        position: [d.position[0] + d.targetSize + 0.3, d.position[1], d.position[2]]
+      }, { silent: false });
+      return;
+    }
     const offset = (d.size.w ?? (d.size.r ?? 0.5) * 2) + 0.3;
     this.addObject(d.type, {
       ...structuredClone(d),
@@ -315,18 +327,62 @@ class App {
     });
   }
 
+  // ---------- 3D 모델 불러오기 ----------
+  async importModelFile(file) {
+    if (file.size > 12 * 1024 * 1024 &&
+        !confirm(`파일이 ${(file.size / 1048576).toFixed(1)}MB로 큽니다. 프로젝트 저장 파일에 포함되어 용량이 커집니다. 계속할까요?`)) {
+      return;
+    }
+    const buf = await file.arrayBuffer();
+    await this._addModelFromData({
+      fileName: file.name,
+      fileB64: arrayBufferToBase64(buf)
+    }, { silent: false });
+  }
+
+  async _addModelFromData(d, opts = {}) {
+    if (this.objects.length >= MAX_OBJECTS) {
+      alert(`오브젝트는 최대 ${MAX_OBJECTS}개까지 추가할 수 있습니다.`);
+      return null;
+    }
+    try {
+      const { group, maxDim } = await parseModelFile(d.fileName, base64ToArrayBuffer(d.fileB64));
+      this.objSeq += 1;
+      const data = defaultModelData({ name: `O${this.objSeq}`, ...d });
+      const o = new ModelObject(data, group, maxDim);
+      if (d.position === undefined) {
+        const t = this.env.getTarget();
+        data.position = [
+          ((this.objects.length % 5) - 2) * 1.6,
+          0,
+          t.z + Math.min(3, Math.max(1.5, t.maxThrow * 0.35))
+        ];
+        o.syncFromData();
+      }
+      this.scene.add(o.group);
+      this.objects.push(o);
+      this.refreshReceivers();
+      this.ui.refreshObjectList();
+      if (!opts.silent) this.selectObject(data.id);
+      this.touch();
+      return o;
+    } catch (e) {
+      console.error(e);
+      alert(`모델을 불러오지 못했습니다: ${e.message}\n(외부 텍스처/Draco 압축을 참조하는 .gltf는 단일 .glb로 변환해 주세요)`);
+      return null;
+    }
+  }
+
   // 환경 + 커스텀 오브젝트를 합쳐 투사 리시버 갱신
   refreshReceivers() {
-    const objRecv = this.objects.map((o) => ({
-      mesh: o.mesh,
-      baseColor: o.data.color,
-      side: o.data.type === 'plane' ? THREE.DoubleSide : THREE.FrontSide
-    }));
-    this.manager.setReceivers([...this.env.receivers, ...objRecv]);
+    this.manager.setReceivers([
+      ...this.env.receivers,
+      ...this.objects.flatMap((o) => o.receiverEntries())
+    ]);
   }
 
   get receiverMeshes() {
-    return [...this.env.receiverMeshes, ...this.objects.map((o) => o.mesh)];
+    return [...this.env.receiverMeshes, ...this.objects.flatMap((o) => o.meshes)];
   }
 
   changeSpec(id, specId) {
@@ -440,7 +496,8 @@ class App {
     }
     this.seq = json.seq || this.projectors.length;
     for (const d of json.objects || []) {
-      this.addObject(d.type, { ...d, id: undefined }, { silent: true });
+      if (d.type === 'model') this._addModelFromData({ ...d, id: undefined }, { silent: true });
+      else this.addObject(d.type, { ...d, id: undefined }, { silent: true });
     }
     this.objSeq = json.objSeq || this.objects.length;
     this.ui.refreshObjectList();

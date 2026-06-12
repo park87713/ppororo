@@ -44,6 +44,13 @@ export function setupUI(app) {
   document.getElementById('btn-add-object').addEventListener('click', () => {
     app.addObject(document.getElementById('obj-type').value);
   });
+  const modelInput = document.getElementById('model-input');
+  document.getElementById('btn-add-model').addEventListener('click', () => modelInput.click());
+  modelInput.addEventListener('change', () => {
+    const f = modelInput.files[0];
+    if (f) app.importModelFile(f);
+    modelInput.value = '';
+  });
   document.getElementById('btn-save').addEventListener('click', () => app.saveToFile());
   document.getElementById('btn-reset').addEventListener('click', () => {
     if (confirm('현재 장면을 버리고 기본 장면으로 초기화할까요?')) app.resetDefault();
@@ -137,9 +144,10 @@ export function setupUI(app) {
     for (const o of app.objects) {
       const li = document.createElement('li');
       if (o.data.id === app.selectedObjectId) li.classList.add('selected');
+      const typeName = o.data.type === 'model' ? '모델' : OBJECT_TYPES[o.data.type].name;
       li.innerHTML = `
-        <span class="dot" style="background:${o.data.color}"></span>
-        <span class="name">${o.data.name} <span class="sub">${OBJECT_TYPES[o.data.type].name}</span></span>
+        <span class="dot" style="background:${o.data.color || '#9aa1ac'}"></span>
+        <span class="name">${o.data.name} <span class="sub">${typeName}</span></span>
       `;
       li.addEventListener('click', () => {
         app.selectObject(o.data.id);
@@ -396,7 +404,8 @@ export function setupUI(app) {
 
   function buildObjectProps(o) {
     const d = o.data;
-    const typeDef = OBJECT_TYPES[d.type];
+    const isModel = d.type === 'model';
+    const typeDef = isModel ? null : OBJECT_TYPES[d.type];
     ui.propsBody.innerHTML = '';
     ui.fields = {};
 
@@ -409,7 +418,7 @@ export function setupUI(app) {
     };
 
     // --- 일반 ---
-    const g1 = group(`오브젝트 — ${typeDef.name}`);
+    const g1 = group(isModel ? `모델 — ${d.fileName}` : `오브젝트 — ${typeDef.name}`);
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
     nameInput.value = d.name;
@@ -420,25 +429,36 @@ export function setupUI(app) {
     });
     g1.appendChild(row('이름', nameInput));
 
-    const colorIn = document.createElement('input');
-    colorIn.type = 'color';
-    colorIn.value = d.color;
-    colorIn.addEventListener('input', () => {
-      d.color = colorIn.value;
-      o.mesh.material?.uniforms?.uBaseColor?.value.set(d.color);
-      app.touch();
-      ui.refreshObjectList();
-    });
-    g1.appendChild(row('표면 색상', colorIn, '투사면의 반사 기본색 — 밝을수록 영상이 잘 보입니다'));
+    if (!isModel) {
+      const colorIn = document.createElement('input');
+      colorIn.type = 'color';
+      colorIn.value = d.color;
+      colorIn.addEventListener('input', () => {
+        d.color = colorIn.value;
+        o.mesh.material?.uniforms?.uBaseColor?.value.set(d.color);
+        app.touch();
+        ui.refreshObjectList();
+      });
+      g1.appendChild(row('표면 색상', colorIn, '투사면의 반사 기본색 — 밝을수록 영상이 잘 보입니다'));
+    }
 
     // --- 크기 ---
     const g2 = group('크기');
-    for (const param of typeDef.params) {
-      const input = numInput(d.size[param.key], 0.1, (v) => {
-        o.setSize({ [param.key]: Math.max(param.min, v) });
+    if (isModel) {
+      const sizeInput = numInput(d.targetSize, 0.1, (v) => {
+        d.targetSize = Math.max(0.1, v);
+        o.applyScale();
         app.touch();
       });
-      g2.appendChild(row(param.label, input));
+      g2.appendChild(row('최대 변 (m)', sizeInput, '모델의 가장 긴 변을 이 길이에 맞춰 균일 스케일'));
+    } else {
+      for (const param of typeDef.params) {
+        const input = numInput(d.size[param.key], 0.1, (v) => {
+          o.setSize({ [param.key]: Math.max(param.min, v) });
+          app.touch();
+        });
+        g2.appendChild(row(param.label, input));
+      }
     }
 
     // --- 위치 / 회전 ---
